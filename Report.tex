@@ -1,0 +1,289 @@
+\documentclass[11pt,twocolumn,letterpaper]{article}
+\usepackage[margin=0.77in,top=0.70in,bottom=0.65in]{geometry}
+\usepackage{amsmath,amssymb,graphicx,booktabs}
+\usepackage[font=small,labelfont=bf,hypcap=false]{caption}
+\usepackage[hidelinks]{hyperref}
+\setlength{\columnsep}{0.24in}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\emergencystretch}{2em}
+\raggedbottom
+\newcommand{\tablehere}[2]{\par\smallskip\noindent\begin{minipage}{\columnwidth}\captionof{table}{#1}\input{results/#2.tex}\end{minipage}\par\smallskip}
+\newcommand{\imagehere}[2]{\par\medskip\noindent\begin{minipage}{\columnwidth}\centering\includegraphics[width=\linewidth]{results/#1.png}\captionof{figure}{#2}\end{minipage}\par\smallskip}
+\title{\bfseries Accuracy and Efficiency of KAN and MLP\\for Building Energy Prediction}
+\author{}
+\date{}
+\begin{document}
+\twocolumn[
+\maketitle
+\begin{abstract}
+We compare a multilayer perceptron (MLP) and a fixed-grid cubic B-spline Kolmogorov--Arnold network (KAN) for joint prediction of heating and cooling loads. Both models use the same 768-sample UCI Energy Efficiency benchmark, preprocessing, objective, and six-trial validation budget per split. On a random-row test set, the MLP achieves lower heating mean absolute error (MAE), 0.363 versus 0.424, while KAN has slightly lower mean cooling MAE, 0.772 versus 0.836, with the ranking varying across three seeds. The MLP takes 0.174 seconds per final fit on average, compared with 0.636 seconds for KAN, and uses 1,351 versus 1,738 trainable parameters. In a separate test on three unseen shapes, both models have larger errors and the MLP leads on all four error measures. These results describe the tested implementations on two fixed partitions of a simulated dataset. Evaluation by geometry changes the practical interpretation of the benchmark.
+\end{abstract}
+\vspace{1.25em}
+]
+
+\section{Introduction}
+An early-stage building design often needs estimates of heating and cooling loads before a detailed design is complete. A designer may want to know, for example, how a change in form or glazing relates to expected demand. A supervised model can approximate a mapping learned from a collection of simulated designs. The useful range of that mapping depends on which designs were simulated and which design cases the model will see later.
+
+The UCI Energy Efficiency dataset provides a controlled setting for this comparison \cite{uci}. The data contain results from Ecotect simulations of 12 building shapes under multiple orientation and glazing settings. Each row records eight design features and two continuous responses. Repeated geometric configurations allow a model to learn from several variants of the same shape. They also make a randomly held-out row and a completely held-out shape different prediction tasks.
+
+We compare a standard MLP with a KAN whose trainable univariate edge functions use fixed cubic B-splines. The comparison covers three dimensions. First, we report heating and cooling errors separately so that a strong result for one target does not obscure weakness on the other. Second, we time final fits on the same CPU environment. Third, we count trainable parameters and report the actual selected widths. The models share a small search budget, with closely aligned candidate parameter bands.
+
+We use two protocols. The primary experiment randomly partitions rows and measures prediction within the simulation design. The secondary experiment groups rows by geometry and holds out three complete shapes. Its purpose is to probe one form of distribution shift. Each protocol uses its own validation partition for model selection and early stopping.
+
+\section{Problem Statement}
+Let \(x_i\) be the eight design features of simulation case \(i\), and let \(y_i=(y_{i,H},y_{i,C})\) contain its two load responses. The task is to learn a function \(f_\theta\) that outputs both values from a single encoded design vector. The outputs are continuous. Every test prediction is evaluated in the original numerical scale of the workbook. The UCI variable table does not specify target units, so the tables label errors in dataset units.
+
+The feature set includes relative compactness, total surface area, wall and roof area, overall height, orientation, glazing area, and glazing area distribution. The first five fields identify exact geometries in this workbook. Glazing area is the dataset's numeric glazing variable. The model receives the recorded value as supplied, without interpreting it as an absolute window area in square metres.
+
+The study asks three quantitative questions. How large is the prediction error on each target under the same test split? How much elapsed time is required for the chosen fit procedure? How many scalar values are trainable in the selected architecture? Lower values are desirable for each accuracy and cost measure. We also ask whether the ranking persists when none of the test geometries occurs in training.
+
+\subsection{Evaluation estimands}
+The random split estimates error on cases drawn from the same set of simulated forms. A row may be new while its geometry is familiar. The group split estimates error on three specific unseen geometries, using observations from other geometries for fitting. A separate group validation subset selects the checkpoint. The two protocols differ in training size, validation composition, test composition, and selected configuration, so their error gap measures the combined effect of these changes.
+
+A result on this sample cannot determine performance on measured buildings with additional drivers such as climate, occupancy, control schedules, or envelope materials. The study therefore evaluates prediction on this simulation benchmark and an internal holdout of shapes. Transfer to external data is outside the empirical design.
+
+\subsection{Observations and geometry}
+The 768 records form a balanced grid of 64 cases per geometry. The row-level sample count determines how many prediction errors can be averaged, but the number of independent geometric configurations is much smaller. In a row split, the metrics answer a question about the observed design grid. In the grouped experiment, the composition and difficulty of the three test geometries can materially affect average error.
+
+We set the grouping key before model training. It uses only relative compactness, total surface area, wall area, roof area and height. The lexicographic ordering of distinct keys assigns stable geometry IDs. These IDs organize the split and the analysis. The networks receive the original geometry descriptors and do not receive the derived ID.
+
+\section{Related Works}
+\subsection{Building energy performance}
+Tsanas and Xifara generated the benchmark to study estimation of building energy performance from design attributes \cite{simulation,uci}. Their study compared statistical learning methods, including random forests and iteratively reweighted least squares, on simulated heating and cooling responses. The work establishes a useful reference task and illustrates the ability of nonlinear estimators to capture patterns within a simulation design. The split and scoring definitions determine what a direct numerical comparison can support. We use the benchmark to compare two neural architectures under a single shared protocol.
+
+Load prediction using design descriptors has a different data structure from predicting future electricity consumption from a meter time series. The present inputs are fixed attributes of simulated design cases. There is no time index and no weather sequence to forecast. A regression model maps the input design to two load values. The geometry holdout reflects a change in the distribution of static design features.
+
+\subsection{Multilayer perceptrons}
+Multilayer networks trained by backpropagation learn intermediate representations that serve a predictive objective \cite{backprop}. A dense MLP layer forms affine combinations of input features and then applies a shared nonlinear activation at each hidden unit. A one-hidden-layer model has a compact parameterization for this dataset and dense matrix operations provide a useful timing baseline. We choose SiLU to provide a smooth activation with a simple derivative. Its application to a weighted sum is the defining nonlinear operation of the baseline used here.
+
+The MLP can mix compactness, area, and glazing variables before applying a nonlinear transformation. An individual unit can therefore respond to a combination of multiple inputs at the first hidden stage. The second layer linearly recombines those learned responses for the two loads. The network has one shared hidden layer and two distinct output coefficients for each hidden activation.
+
+\subsection{Kolmogorov--Arnold networks}
+Liu and colleagues proposed KANs with learnable univariate edge functions \cite{liu}. Each node sums transformed inputs, and composing layers builds multivariate interactions. Their spline-based design motivates the implementation used here. Our implementation uses a fixed basis with a trainable SiLU branch and spline coefficients. The study's KAN name refers to that concrete configuration. Adaptive knot placement, regularization for symbolic discovery, and pruning are separate design decisions and are outside the comparison.
+
+Edge functions can be evaluated directly over an input range. This offers a way to inspect learned responses when the basis and weights are available. However, interpreting such functions as the isolated effect of a building feature would require additional evidence. Geometry descriptors are correlated, and a later layer composes earlier node outputs. Present results quantify prediction and cost, without making claims about causal effects or interpretability.
+
+\subsection{Grounds for comparing efficiency}
+The number of trainable parameters coarsely describes the size of the learned representation. It is separate from work per forward pass. A KAN edge may use several basis coefficients, and its input must be expanded before the matrix multiply in our implementation. A dense MLP has a simpler operation sequence, and a comparison based only on its parameter count would miss that difference. We therefore pair empirical fit time with the parameter count.
+
+Timing results from other KAN implementations may use different computational kernels, optimizers, and accelerators. Within this study both models use the same NumPy and Adam code and one CPU environment. The comparison addresses application performance under this particular computational setting.
+
+
+\section{Methodology}
+\subsection{Data validation and encoding}
+The notebook checks that the official workbook has 768 rows and ten relevant columns, all finite, with no missing entries or duplicate predictor vectors. It validates orientation and glazing distribution against the recorded category domains. Six inputs are numeric. We subtract the training mean and divide by the training population standard deviation for each. Four orientation indicators and six glazing distribution indicators give 16 encoded features in total. Each categorical field retains all of its indicator columns, with no reference category dropped.
+
+For both protocols the mean and standard deviation of each response are fitted on the training rows. Scaling puts heating and cooling on similar footing in the optimization objective. Transformed validation and test cases use the training statistics. Final predictions are mapped to the workbook scale using the inverse of the same transformation. Scaling fitted on the training subset keeps information from held-out features and targets out of the learned preprocessing statistics.
+
+\subsection{MLP}
+The MLP has two dense layers, shared hidden width \(h\) and two outputs. For a preprocessed sample \(z\), its prediction in scaled target units is
+\begin{equation}
+f_{\rm MLP}(z)= W_2\,s(W_1 z+b_1)+b_2 ,
+\end{equation}
+where \(s(t)=t/(1+\exp(-t))\) is applied elementwise. \(W_1\) is \(h\times16\) and \(W_2\) is \(2\times h\). The model has \(19h+2\) trainable scalars, including both biases. Candidate widths of 47, 71, and 95 give counts of 895, 1,351, and 1,807.
+
+\subsection{Spline KAN}
+Each KAN layer maps \(u\in\mathbb R^d\) to \(v\in\mathbb R^q\) with
+\begin{align}
+v_j &= b_j+\sum_{i=1}^{d}\phi_{ji}(u_i),\\
+\phi_{ji}(t)&=a_{ji}s(t)+\sum_{m=0}^{10} c_{jim}
+ B\!\left(\frac{t-g_m}{0.5}\right),\\
+g_m&=-2.5+0.5m .
+\end{align}
+The function \(B\) is the centered cardinal cubic B-spline. Writing \(r=|t|\), its values are
+\begin{equation}
+ B(t)=
+ \begin{cases}
+ (4-6r^2+3r^3)/6,&0\leq r<1,\\
+ (2-r)^3/6,&1\leq r<2,\\
+ 0,&r\geq 2.
+ \end{cases}
+\end{equation}
+Each center therefore contributes only within one unit of its location in the unscaled layer coordinate. The finite set of centers loses its full interior overlap near the edges of the covered range. Outside the support of every center, the SiLU branch still contributes. The grid centers and spacing are fixed constants in both layers.
+
+The network composes two such layers of sizes \(16\), \(h\), and \(2\). Each edge learns one SiLU coefficient and 11 spline weights. Each receiving node also learns a bias. Its parameter count is \(217h+2\). Candidate widths 4, 6, and 8 yield counts of 870, 1,304, and 1,738. These are within roughly four percent of the three MLP candidate counts at the same budget tier.
+
+\subsection{Numerical implementation}
+The code evaluates the SiLU and spline features for each incoming coordinate, reshapes the expanded basis into a matrix, and multiplies it by the layer's weight matrix. The basis computation is reused across outgoing nodes of a layer. Reverse-mode derivatives use the analytic derivative of SiLU and the piecewise derivative of the cubic basis. The input gradient for the first layer is discarded after backpropagation because the inputs are fixed.
+
+Both models use zero biases and normal random weight initialization. Standard deviation is the reciprocal square root of the number of entries in the layer's expanded input vector, which is the ordinary fan-in for MLP. Training calculations use single precision. The notebook checks the analytic gradients against finite differences at one selected entry from each trainable parameter array. It also checks that the translated spline basis sums to one and its derivatives sum to zero over the interior interval used for the check. These checks target implementation errors in the tested models and do not establish the quality of a fitted predictor.
+
+\subsection{Partitions and model selection}
+The row protocol uses a fixed permutation from NumPy seed 2026. The first 538 rows are used for training, the following 115 for validation and the final 115 for testing. The group protocol uses a separate permutation of the 12 geometry IDs from the same seed. Seven shapes provide 448 training rows. Two shapes provide 128 validation rows and three shapes provide 192 test rows. No geometry ID crosses partitions in the group protocol.
+
+Each model family tests its three widths against two learning rates, 0.003 and 0.010. This is six trials per family in each protocol. All tuning runs use seed 17. The winner minimizes the best validation mean squared error across the two scaled responses. Tuning is performed separately in each protocol. We do not fuse validation rows into the final training subset because those rows are needed to select the final checkpoints. Reporting the actual parameter counts acknowledges that budget bands are matched among candidates and that selection may choose different bands.
+
+After selection, each model is reinitialized and fit with seeds 101, 202, and 303. Across architectures each seed uses the same minibatch index order for the same epoch on the same training subset. Initialization also uses the seed, but the differently shaped arrays and scaling yield distinct values in the two models. The test values enter only the scoring stage. Each model produces two predictions for every test sample.
+
+\subsection{Objective, updates and stopping}
+For minibatch \(I\) and target \(t\) the network produces \(\widehat y'_{it}\) on the standardized scale. The objective is
+\begin{equation}
+ \mathcal L_I=\frac{1}{2|I|}
+ \sum_{i\in I}\sum_{t\in\{H,C\}}
+    (\widehat y'_{it}-y'_{it})^2 .
+\end{equation}
+The gradient is obtained by differentiating the mean square through both layers. Adam updates each trainable array, with first and second moment decay rates \(0.9\) and \(0.999\), bias correction, and denominator constant \(10^{-8}\) \cite{adam}. Each epoch shuffles the training rows and processes batches of up to 64 records. The final group of each epoch may be shorter. No dropout, pruning, or explicit weight decay is applied.
+
+Both models run for at most 250 epochs. Validation is performed after each epoch on the full validation subset. A new strictly lower validation objective saves a checkpoint. Training stops after 35 consecutive epochs without improvement or when it reaches the epoch cap. The saved parameters are restored before prediction. This rule allows models to use different numbers of epochs. A maximum-epoch match alone would not ensure that they incur the same work.
+
+\subsection{Accuracy and efficiency measures}
+Test mean absolute error and root mean squared error are computed separately for the two targets. If \(e_i=\widehat y_i-y_i\) on one target and \(n\) is the test set size, then
+\begin{align}
+ {\rm MAE}&=n^{-1}\sum_i |e_i|,\\
+ {\rm RMSE}&=\sqrt{n^{-1}\sum_i e_i^2}.
+\end{align}
+MAE reflects typical absolute deviation, and RMSE places more weight on larger errors. A single model can rank differently by the two measures if error tails differ. The reported mean and sample standard deviation come from the three individual runs, each evaluated independently. We do not average their predictions into an ensemble.
+
+Elapsed time is measured around the final training loop and checkpoint restoration using a monotonic wall clock. It includes shuffling, the training and validation passes, and checkpoint copying. Data reading, preprocessing, model initialization, tuning, and test scoring are excluded. The use of a common timer provides a practical cost measure for repeated fitting. It does not measure per-sample inference latency.
+
+Trainable size is the sum of entries in the two weight arrays and the two bias arrays. Knots, stored preprocessing constants, Adam moment states and training activations are excluded. Parameter count and elapsed time answer separate questions. A model with fewer learned scalars can still take longer to train.
+
+\subsection{Repeatability and qualitative checks}
+Split membership, selected parameters, per-seed metrics, epoch curves and every test prediction are saved as CSV files. The environment record includes the workbook hash, runtime versions, device description and seeds. Figure overlays use the first predeclared final seed, 101, so both models' displayed predictions correspond to the same seed and samples. Means and deviations in the tables include all three seeds.
+
+\section{Computational Experiments}
+\subsection{Machine, sample and run accounting}
+The experiments ran on Windows 11 in a single process with an Intel64 family 6 model 197 CPU. The environment reports 16 logical CPUs and requests a single BLAS thread before importing NumPy. The runtime was Python 3.12.14 with NumPy 2.3.5 and pandas 3.0.1. Training was CPU-only. Timings below one second are susceptible to scheduling and runtime variation and are rounded in the text. Machine-specific time ratios should be interpreted with that scale in mind.
+
+In total we trained 24 configuration trials and 12 final runs across the two protocols. A split membership file records every case. The prediction file contains 1,842 rows, covering 115 row-test cases and 192 shape-test cases for each of six model--seed pairs. The same workbook was used for both protocols. Its checksum is recorded as a SHA-256 digest in the environment file.
+
+\subsection{Selection on random rows}
+Tables below list all six trials per model, with the selected validation error in bold. The learning-rate effect is substantial for the MLP. At each of its three widths, 0.003 stops in 45--54 epochs and gives a validation error above 0.08. The runs at 0.010 reach validation error below 0.008. The selected MLP width is 71 at learning rate 0.010. Its tuning checkpoint is at epoch 224.
+
+\tablehere{Random rows. MLP validation trials.}{row_mlp_tuning}
+
+The KAN tuning minimum is 0.003696 at width 8 and learning rate 0.003. The width-6 configuration at 0.010 yields 0.003698. The gap is about \(1.7\times10^{-6}\) on this single validation and initialization, so the selected width is sensitive to small changes. We apply the specified argmin to both families and retain the full trial table to show the margin.
+
+\tablehere{Random rows. KAN validation trials.}{row_kan_tuning}
+
+\subsection{Selection with geometry held out}
+In the group experiment, MLP width 95 at 0.010 is the selected configuration. It records its best validation score at epoch 3. The KAN selection is width 6 at 0.010 with a tuning checkpoint at epoch 79. The same selection rule therefore yields different width bands across protocols and model families.
+
+\tablehere{Held-out geometries. MLP validation trials.}{shape_mlp_tuning}
+
+\tablehere{Held-out geometries. KAN validation trials.}{shape_kan_tuning}
+
+The validation shapes are 4 and 6, both with a height of 3.5 in the design data. Training contains low and tall forms, while the test geometries include both heights. This matters because a checkpoint chosen for two lower geometries may fit them well without generalizing to the higher-load test cases. The group results should be interpreted with the validation set composition in view.
+
+\subsection{Validation trajectories}
+In the seed-101 row experiment, both families continue improving late in training. The corresponding group runs see different validation dynamics and restore earlier checkpoints. The stopping rule reacts to the score on the chosen validation cases. On a small group validation sample that score reflects the distribution of those groups.
+
+\imagehere{validation_curves}{Validation trajectories on a log scale for seed 101. Each curve ends at its stopping epoch. The saved best epoch can precede that endpoint.}
+
+\subsection{Random-row test accuracy}
+The MLP obtains mean heating MAE of 0.363 and RMSE of 0.468. The KAN has mean heating MAE of 0.424 and RMSE of 0.582. The absolute difference in mean heating MAE is 0.061 dataset units, or about 14.5 percent relative to the KAN mean. The MLP has lower heating MAE and RMSE on all three paired seeds.
+
+\tablehere{Random-row errors. Mean and sample standard deviation across three final seeds.}{row_accuracy}
+
+The cooling result is mixed. The KAN gives mean MAE of 0.772 and RMSE of 1.153, compared with 0.836 and 1.210 for MLP. The cooling MAE difference is 0.064 dataset units, or approximately 7.7 percent of the MLP mean. The cooling MAE advantage appears for seeds 101 and 303. Seed 202 favors the MLP. The KAN cooling RMSE also varies more across these seeds, with a sample standard deviation of 0.338 versus 0.163 for MLP. With three seeds and one fixed split, these differences describe the observed runs without a population-level significance claim.
+
+\tablehere{Random-row runs. H and C stand for heating and cooling. Best and Stop are the selected and final epochs.}{row_individual}
+
+\subsection{Visual inspection of random-row predictions}
+For seed 101, heating predictions for both models lie close to the line of identity over the observed range. Cooling predictions show additional scatter, and several relatively large errors raise RMSE above MAE for each architecture. The plotted observations are the same across the two models. The plot combines residual information at all load values with the average scores in the table. An aggregate improvement can come from better agreement on a subset of cases, including cases with large errors, without changing the fit uniformly across the range.
+
+\imagehere{row_predictions}{Observed versus predicted loads on the common random-row test cases, seed 101. The diagonal represents exact agreement. The aggregate scores average all three runs.}
+
+\subsection{What the row result establishes}
+With 115 rows sampled from the same geometry grid and all 12 geometries present in training, the row protocol resembles prediction for new settings drawn from known building shapes. This is useful when the available simulation library already covers the forms of interest. Its scores say less about responses to changes in the geometric descriptors that move a design outside that set.
+
+The row result also separates two architectural claims. The MLP has an error advantage for heating and a time advantage for fitting. Its cooling errors are slightly higher on average. Reporting a combined prediction score alone would make it harder to see which application goals favor which model. Heating and cooling predictions can matter differently for separate design decisions, and a relative gain on one target does not carry automatically to the other.
+
+
+\subsection{Test accuracy on unseen shapes}
+The MLP has lower mean errors for both heating and cooling in the held-out geometry experiment. Mean heating MAE is 3.873 for MLP and 6.847 for KAN. Mean cooling MAE is 4.441 for MLP and 6.383 for KAN. Both RMSE values follow the same ranking. The MAEs for both families exceed their random-row counterparts by several dataset units.
+
+\tablehere{Held-out shape errors. Mean and sample standard deviation across three final seeds.}{shape_accuracy}
+
+The sizes of the degradations depend on the observed shape composition, the smaller training subset, and validation on a different set of designs. The outcome supports a narrower conclusion of weaker prediction in this held-out split. A benchmark with grouped cross-validation would be needed to determine how commonly this effect occurs when different shapes are omitted.
+
+\tablehere{Held-out shape run details. H and C denote heating and cooling MAE.}{shape_individual}
+
+\subsection{Errors by held-out geometry}
+Each test geometry contributes 64 cases. We average absolute and signed errors across cases and the three final runs. Signed error is defined as prediction minus observation. Geometry 8 has the largest errors for both models and both targets. Its mean observed loads are 38.61 for heating and 40.24 for cooling, and both models systematically underpredict them. Geometry 5 is overpredicted by KAN on both targets. Geometry 11 is underpredicted by both families on average, with larger negative bias for KAN.
+
+\tablehere{Mean absolute errors by test geometry and model.}{group_abs}
+\tablehere{Mean signed errors by test geometry and model. Negative values indicate underprediction.}{group_error}
+
+These patterns help distinguish two possible limitations of a low aggregate score. In the row protocol the fitted network can use repeated samples from the same geometry to learn its response. In the held-out protocol the model must infer the response from relationships learned across other geometries. For example, the test group with high load still needs an accurate geometry effect across many orientation and glazing variants. A consistent offset on that shape raises each of its aggregate errors.
+
+\imagehere{shape_predictions}{Observed versus predicted loads on the 192 cases of the three unseen geometries, seed 101. The high-load cases show underprediction by both models.}
+
+\subsection{Geometry assignments}
+The group key uses exact workbook values in the first five columns, and IDs are assigned to sorted keys. This table gives the 12 group sizes and three geometric descriptors for auditing. Relative compactness and total surface area are present in the original workbook and can be joined by zero-based row ID via the split manifest. Here the validation geometries have the same height and roof area. As a result, group validation samples only part of the variation in the feature space.
+
+\tablehere{Shape membership and selected descriptors in workbook scales.}{shape_geometry}
+
+\subsection{Training time and model size}
+The MLP fits faster on both protocols. The final row fits average 0.174 seconds for MLP and 0.636 seconds for KAN, a ratio of about 3.7. Final shape fits average 0.024 and 0.148 seconds, about 6.3 using unrounded values. Shape runs stop early because of their validation dynamics and have fewer training rows. Absolute fit times across protocols therefore reflect the entire procedure rather than only architectural cost.
+
+\tablehere{Final-fit elapsed seconds and trainable parameters. Time is mean and sample standard deviation across three seeds.}{efficiency}
+
+In the random-row comparison, the selected KAN is larger by 387 parameters. In the shape comparison, the KAN is smaller by 503 parameters, while its elapsed time is longer. This inversion illustrates why a parameter count is a poor substitute for an empirical runtime measurement. Work per epoch depends on sequence and cost of operations and the number of minibatches. Parameter counts exclude activations and optimizer state.
+
+For the three row runs, the mean of each run's elapsed time divided by its executed epoch count is 0.70 milliseconds for MLP and 4.05 milliseconds for KAN. On shape runs, the corresponding values are 0.63 and 3.18 milliseconds. These descriptive ratios provide context for the total-time differences and retain validation and checkpoint work inside their numerator. They do not isolate the spline evaluation kernel or measure a fixed forward-pass latency. The KAN in our code evaluates cubic basis values and derivatives before dense multiplication, a plausible contributor to its per-epoch cost.
+
+\subsection{Practical interpretation}
+If heating accuracy and quick refitting within this dataset are priorities, the selected MLP is the stronger candidate on the row experiment. If cooling errors dominate a deployment objective, the KAN's lower mean row error merits a closer look, although the advantage varies across training seeds and coincides with higher fit time. For transfer to the chosen unseen geometries, the MLP has lower errors and faster fits. Its error on geometry 8 remains large enough that model choice alone does not solve the transfer problem.
+
+These results provide a baseline for early evaluation workflows. A quick fit favors iterative work when the model must be retrained often. When a model is fit once and queried many times, training cost alone may matter less than predictive error and inference cost. The experiment records fit time and parameter count, so an inference-focused decision would require a separate timing measurement over realistic batch sizes.
+
+\subsection{Threats to validity}
+\paragraph{Data and split.}
+The benchmark is simulated and omits many building and operational factors. There are only 12 geometries, and this experiment uses one random row partition and one group partition. Different held-out shapes could change the ranking. Three final seeds capture a component of optimization variability on each split. They do not estimate uncertainty across geometries, simulator assumptions, or populations of real buildings.
+
+\paragraph{Selection and fairness.}
+Both families get six trials in each experiment and have candidate sizes in closely matched bands. The same learning-rate grid can nevertheless favor either family, and the best model sizes can differ. The original KAN paper explores other training and grid options. More tuning, family-specific searches, a multi-seed validation objective, or strictly matched parameter counts could alter the outcome. The KAN validation winner on rows is particularly close to a smaller configuration.
+
+\paragraph{Time and metrics.}
+CPU timings include system scheduling effects and are measured with a simple NumPy implementation. A different platform or kernel can change performance. Elapsed time includes stopping behavior along with compute per batch. Our size measure counts only learned scalars. The loss weights standardized targets equally, while the final MAE and RMSE are in workbook units. Applications with asymmetric costs for overprediction and underprediction could require a different training objective and additional error measures.
+
+\section{Conclusion}
+This project compared MLP and fixed-grid cubic spline KAN models for joint estimation of heating and cooling loads on UCI Energy Efficiency. Both models used the same input processing, target scaling, splits, batch ordering by seed, optimizer, search budget, and stopping policy. Test scores were computed after validation selection. A parameter-matched candidate grid constrained the approximate size range while allowing each family to choose its own width.
+
+On held-out rows, the MLP had lower heating errors and a faster final fit. KAN had slightly lower mean cooling error, with results varying across seeds. The selected row KAN used more parameters. In the shape experiment the MLP had lower error on both targets and took less time to fit, even though the selected KAN contained fewer parameters. The combined evidence supports retaining MLP as a baseline for this benchmark and treating the random-row cooling difference as a result to investigate further.
+
+The geometry comparison is central to interpreting the small row errors. Both models performed worse on the three unseen shapes, and both substantially underpredicted the high-load geometry. Building designs that differ in form may require new simulation data even when a predictor fits well among familiar shapes. These results describe the tested designs, partitions and training procedures rather than establishing an architecture-wide ranking.
+
+\subsection{Extensions of the evaluation}
+A stronger follow-up would rotate held-out geometries and use whole training geometries for validation, reporting per-shape errors and uncertainty across splits. This would separate conclusions driven by the current geometry IDs from more robust properties of the models. Validation could also average several initializations, so small score differences do not govern width selection as strongly as in the present row KAN trials.
+
+An efficiency extension could plot accuracy versus trainable size at several fixed budgets or compare families at fixed wall-clock budgets. Recording standardized timings per epoch, single-row inference latency and batch throughput would help distinguish compute costs from early stopping. If more data were available, a further evaluation could train and test across simulator regimes and benchmark against measured loads under a defined operating environment.
+
+\subsection{Reproducing the comparison}
+The accompanying notebook executes the entire pipeline from the official workbook. The split manifest contains zero-based IDs, and its geometry column can be used to check the grouped holdout. The tuning CSV stores all trials, while the runs CSV, predictions CSV, environment record and learning curves document the final experiments. After a clean run, aggregate scores are derived from the same restored checkpoints and numerical settings. Minor numerical and runtime differences can occur on another machine. The tables here use the supplied recorded run.
+
+\renewcommand{\refname}{References}
+\begin{thebibliography}{9}
+\bibitem{uci}
+A. Tsanas and A. Xifara.
+\newblock Energy Efficiency [dataset].
+\newblock UCI Machine Learning Repository, 2012.
+\newblock \href{https://doi.org/10.24432/C51307}{doi:10.24432/C51307}. CC BY 4.0.
+
+\bibitem{simulation}
+A. Tsanas and A. Xifara.
+\newblock Accurate quantitative estimation of energy performance of residential buildings using statistical machine learning tools.
+\newblock \emph{Energy and Buildings}, 49:560--567, 2012.
+\newblock \href{https://doi.org/10.1016/j.enbuild.2012.03.003}{doi:10.1016/j.enbuild.2012.03.003}.
+
+\bibitem{backprop}
+D. E. Rumelhart, G. E. Hinton, and R. J. Williams.
+\newblock Learning representations by back-propagating errors.
+\newblock \emph{Nature}, 323:533--536, 1986.
+\newblock \href{https://doi.org/10.1038/323533a0}{doi:10.1038/323533a0}.
+
+\bibitem{liu}
+Z. Liu, Y. Wang, S. Vaidya, F. Ruehle, J. Halverson, M. Solja\v{c}i\'c, T. Y. Hou, and M. Tegmark.
+\newblock KAN: Kolmogorov--Arnold networks.
+\newblock \emph{International Conference on Learning Representations}, 2025.
+\newblock \href{https://arxiv.org/abs/2404.19756}{arXiv:2404.19756}.
+
+\bibitem{adam}
+D. P. Kingma and J. Ba.
+\newblock Adam: A method for stochastic optimization.
+\newblock \emph{International Conference on Learning Representations}, 2015.
+\newblock \href{https://arxiv.org/abs/1412.6980}{arXiv:1412.6980}.
+\end{thebibliography}
+\end{document}
