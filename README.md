@@ -6,7 +6,10 @@
 |---|---|
 | Report.tex | LaTeX source for the 10-page, two-column, single-spaced report. It uses figures and tables from the results folder. |
 | Presentation.pptx | 15 slides with speaker notes and suggested timings for all three presenters. |
-| Energy_KAN_MLP.ipynb | Executed Jupyter notebook covering data preparation, training, evaluation, and figures. |
+| Energy_KAN.ipynb | Standalone KAN notebook with data preparation, training, evaluation, and figures. |
+| Energy_MLP.ipynb | Standalone MLP notebook with the same data preparation, evaluation, and figure layout. |
+| KAN_Preprocessed_16_Inputs.xlsx and MLP_Preprocessed_16_Inputs.xlsx | Model inputs for both splits. Each sheet contains 768 rows and 16 features. |
+| Energy_KAN_MLP.ipynb | Original joint benchmark notebook used for the report and presentation. |
 | ENB2012_data.xlsx | Original UCI Energy Efficiency dataset. |
 | requirements.txt | Python dependencies for the notebook. |
 | results/ | Split assignments, configuration trials, per-run metrics, per-sample predictions, figures, and runtime details. |
@@ -18,7 +21,7 @@ Open a terminal in the project folder. Use Python 3.12 and install the dependenc
     python -m pip install -r requirements.txt
     python -m jupyterlab
 
-Open `Energy_KAN_MLP.ipynb` and choose **Restart Kernel and Run All Cells**. The notebook reads the workbook from the project folder and regenerates the CSV, PNG, and environment files in `results/`. Run it in a copy of the folder if you want to preserve the exact timings reported in the presentation and report. Training times can vary with hardware, software, and background activity.
+Open `Energy_KAN.ipynb` or `Energy_MLP.ipynb` and choose **Restart Kernel and Run All Cells**. Both notebooks use the same source data and splits, export their 16 input columns to Excel, and save results to `results/kan/` or `results/mlp/`. The report and presentation use the original joint benchmark output in `results/`. Training times can vary with hardware, software, and background activity.
 
 ## Compile the report
 
