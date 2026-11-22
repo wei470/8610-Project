@@ -1,36 +1,45 @@
-# Building Energy Prediction with KAN and MLP
+# Building Energy Prediction with Gaussian RBF-KAN and MLP
+
+This project predicts two simulated building loads, heating and cooling, from the UCI Energy Efficiency dataset. The KAN variant represents each connection with 11 weighted Gaussian radial basis functions. The centers range from −2.5 to 2.5 in steps of 0.5. The Gaussian scale is 0.5.
 
 ## Project files
 
 | File | Contents |
 |---|---|
-| Report.tex | LaTeX source for the 10-page, two-column, single-spaced report. It uses figures and tables from the results folder. |
-| Presentation.pptx | 15 slides with speaker notes and suggested timings for all three presenters. |
-| Energy_KAN.ipynb | Standalone KAN notebook with data preparation, training, evaluation, and figures. |
-| Energy_MLP.ipynb | Standalone MLP notebook with the same data preparation, evaluation, and figure layout. |
-| KAN_Preprocessed_16_Inputs.xlsx and MLP_Preprocessed_16_Inputs.xlsx | Model inputs for both splits. Each sheet contains 768 rows and 16 features. |
-| Energy_KAN_MLP.ipynb | Original joint benchmark notebook used for the report and presentation. |
-| ENB2012_data.xlsx | Original UCI Energy Efficiency dataset. |
-| requirements.txt | Python dependencies for the notebook. |
-| results/ | Split assignments, configuration trials, per-run metrics, per-sample predictions, figures, and runtime details. |
+| `Energy_KAN.ipynb` | Gaussian RBF-KAN training, evaluation, and a worked example that reconstructs one learned connection. |
+| `Energy_MLP.ipynb` | MLP training and evaluation with the same data splits. |
+| `Energy_No_Input_Standardization.ipynb` | Evaluates both models with and without standardizing the six numeric inputs. |
+| `ENB2012_data.xlsx` | Original UCI Energy Efficiency dataset. |
+| `KAN_Preprocessed_16_Inputs.xlsx` and `MLP_Preprocessed_16_Inputs.xlsx` | The 16 model inputs for both test protocols, in the original workbook's row order. |
+| `compare_results.py` | Combines both models’ outputs and draws the comparison figures. |
+| `results/` | Configuration trials, per-run scores, predictions, and plots. `results/kan/` and `results/mlp/` hold the separate outputs. |
+| `gaussian-edge-animation.html` | Offline demo that adds learned Gaussian terms one at a time. |
+| `Presentation_中文版.pptx` | Chinese presentation with validation MSE curves, early-stopping examples, and a four-panel test prediction comparison. |
+| `Presentation.pptx` | 18 slides with speaker notes, input examples on slides 7 and 8, and a link to the demo on slide 10. |
+
+## Experimental splits
+
+Random rows use 538 training, 115 validation, and 115 test records. The held-out shape split uses 8 training shapes (512 records), 2 validation shapes (128), and 2 test shapes (128). Both models use the same assignments.
+
+The earlier combined notebook (`Energy_KAN_MLP.ipynb`), `Report.tex`, and the LaTeX tables under `results/` reflect an earlier experiment. The standalone notebooks and current CSV results document the current experiment.
 
 ## Reproduce the experiments
 
-Open a terminal in the project folder. Use Python 3.12 and install the dependencies in a virtual environment.
+In a Python 3.12 environment, open a terminal in the project folder and run:
 
-    python -m pip install -r requirements.txt
-    python -m jupyterlab
+```sh
+python -m pip install -r requirements.txt
+python -m jupyterlab
+```
 
-Open `Energy_KAN.ipynb` or `Energy_MLP.ipynb` and choose **Restart Kernel and Run All Cells**. Both notebooks use the same source data and splits, export their 16 input columns to Excel, and save results to `results/kan/` or `results/mlp/`. The report and presentation use the original joint benchmark output in `results/`. Training times can vary with hardware, software, and background activity.
-
-## Compile the report
-
-Run `tectonic Report.tex` from the project folder, or compile the source in a LaTeX environment with `graphicx`, `booktabs`, `caption`, and `hyperref`. Keep the PNG figures and TeX tables in `results/`. The report tables use the recorded results included with the project.
+Open `Energy_KAN.ipynb` and `Energy_MLP.ipynb` and select **Restart Kernel and Run All Cells**. Then run `python compare_results.py` to regenerate the comparison files in `results/`. Training times vary by machine and background activity.
 
 ## Presentation plan
 
-The presentation is on December 8, 2026, at 8:30 a.m. Presenter A covers slides 1–5 in 7 minutes, Presenter B covers slides 6–10 in 8 minutes, and Presenter C covers slides 11–15 in 8 minutes. The remaining 7 minutes are for questions. Open the PowerPoint speaker notes for speaking points and slide-by-slide timings.
+December 8, 2026, at 8:30 a.m. Presenter A covers slides 1–5 in 7 minutes, Presenter B covers slides 6–13 in 8 minutes, and Presenter C covers slides 14–18 in 8 minutes. The remaining 7 minutes are for questions.
 
-## Data source
+## Sources
 
-Tsanas, A. & Xifara, A. (2012). [Energy Efficiency](https://doi.org/10.24432/C51307). UCI Machine Learning Repository. [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Tsanas and Xifara (2012). [Energy Efficiency](https://doi.org/10.24432/C51307), UCI Machine Learning Repository. [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+- Liu et al. [KAN: Kolmogorov–Arnold Networks](https://arxiv.org/abs/2404.19756).
+- Li (2024). [Kolmogorov-Arnold Networks are Radial Basis Function Networks](https://arxiv.org/abs/2405.06721).

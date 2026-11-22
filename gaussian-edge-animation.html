@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>高斯项如何叠成 F₁(x₁)</title>
+<style>
+  :root {
+    color-scheme: light;
+    --paper: #f3f3ed;
+    --surface: #fffefa;
+    --ink: #172b2d;
+    --muted: #51696a;
+    --line: #dce4dd;
+    --grid: #e5ebe5;
+    --axis: #819694;
+    --current: #006f69;
+    --reference: #586776;
+    --term: #9b442b;
+    --selected: #e4f2ed;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --paper: #151f20; --surface: #1b292a; --ink: #e8f2ee; --muted: #b5c7c4;
+      --line: #384c4b; --grid: #344746; --axis: #829994; --current: #77d8c2;
+      --reference: #acbad1; --term: #f3a286; --selected: #23443e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); }
+  main { width: min(1120px, calc(100% - 56px)); margin: 36px auto 32px; }
+  h1, h2, p { margin: 0; }
+  h1 { font-size: clamp(1.65rem, 4vw, 2.65rem); letter-spacing: -.035em; line-height: 1.2; }
+  h2 { font-size: 1.12rem; line-height: 1.4; }
+  .subtitle { margin-top: 9px; color: var(--muted); font-size: .93rem; line-height: 1.65; }
+  .plot { margin-top: 21px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); padding: 16px 18px 13px; }
+  .plot-head, .term-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 11px 18px; }
+  .formula { font-size: .93rem; font-weight: 650; }
+  .status { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .chart { width: 100%; height: clamp(231px, 36vw, 350px); display: block; }
+  .legend { display: flex; align-items: center; gap: 7px 20px; flex-wrap: wrap; color: var(--muted); font-size: .82rem; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend [hidden] { display: none; }
+  .swatch { width: 23px; border-top: 3px solid var(--current); }
+  .original { border-top: 2px dashed var(--reference); }
+  .contribution { border-top: 2px dotted var(--term); }
+  #selection-detail { margin-top: 10px; min-height: 1.45em; font-size: .83rem; color: var(--muted); }
+  .terms { margin-top: 23px; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--current); outline-offset: 2px; }
+  .action { min-height: 38px; padding: 6px 11px; font-size: .84rem; white-space: nowrap; }
+  .action:hover:not(:disabled) { border-color: var(--current); }
+  .action:disabled { opacity: .49; cursor: default; }
+  #play { color: var(--surface); background: var(--current); border-color: var(--current); }
+  .term-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 9px; margin-top: 12px; }
+  .term { display: grid; grid-template-columns: 1fr 17px; grid-template-rows: auto 33px auto; align-items: center; text-align: start; padding: 8px 9px 7px; min-width: 0; }
+  .term:hover { border-color: var(--axis); }
+  .term[aria-pressed="true"] { background: var(--selected); border-color: var(--current); }
+  .term-title { font-weight: 650; font-size: .87rem; }
+  .term-toggle { color: var(--current); font-size: .95rem; text-align: end; }
+  .term canvas { grid-column: span 2; width: 100%; height: 33px; display: block; }
+  .term-weight { grid-column: span 2; color: var(--muted); font-size: .76rem; font-variant-numeric: tabular-nums; }
+  footer { margin-top: 15px; color: var(--muted); font-size: .79rem; line-height: 1.6; }
+  @media (max-width: 885px) { .term-grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+  @media (max-width: 550px) {
+    main { width: calc(100% - 24px); margin-top: 21px; }
+    .plot { padding-inline: 9px; margin-top: 15px; }
+    .plot-head { gap: 5px; }
+    .term-grid { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+    .term { padding-inline: 6px; }
+  }
+  @media (max-width: 355px) { .term-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>高斯项如何叠成 F₁(x₁)</h1>
+    <p class="subtitle">点选下面的小图，将对应的高斯项加入当前曲线。再点一次就移除。</p>
+  </header>
+  <section class="plot" aria-label="拟合曲线对比">
+    <div class="plot-head">
+      <p class="formula">F₁(x₁) = 11 个加权高斯项</p>
+      <p id="model-status" class="status" aria-live="polite"></p>
+    </div>
+    <canvas class="chart" id="edge-chart" role="img" aria-label="横轴是标准化后的 X₁，虚线是训练好的 F₁，实线是选中项的和。"></canvas>
+    <div class="legend" aria-label="图例">
+      <span><i class="swatch original" aria-hidden="true"></i>训练好的 F₁</span>
+      <span><i class="swatch" aria-hidden="true"></i>当前叠加</span>
+      <span id="recent-key" hidden><i class="swatch contribution" aria-hidden="true"></i><b id="recent-label">刚操作的高斯项</b></span>
+    </div>
+    <p id="selection-detail">从零开始，点击任意高斯项加入曲线。</p>
+  </section>
+  <section class="terms" aria-labelledby="terms-title">
+    <div class="term-head">
+      <h2 id="terms-title">11 个加权高斯项</h2>
+      <div class="controls">
+        <button class="action" id="play" type="button">按顺序播放</button>
+        <button class="action" id="all" type="button">全部加入</button>
+        <button class="action" id="reset" type="button">重置</button>
+      </div>
+    </div>
+    <div class="term-grid" id="term-grid" aria-label="按网格中心选择高斯项"></div>
+  </section>
+  <footer>来自项目的随机行划分实验（种子 101）。展示的是 X₁ 到第一个隐藏节点的一条连接。小图使用相同的纵轴范围。</footer>
+</main>
+<script id="trained-data" type="application/json">{"centers":[-2.5,-2.0,-1.5,-1.0,-0.5,0.0,0.5,1.0,1.5,2.0,2.5],"scale":0.5,"weights":[-0.12107722461223602,0.10785488039255142,-0.1600073277950287,-0.15580959618091583,-0.14423438906669617,-0.05386988818645477,0.2098201960325241,0.14513835310935974,0.008363965898752213,-0.310842901468277,-0.3434167504310608],"x":[-3.5,-3.475,-3.45,-3.425,-3.4,-3.375,-3.35,-3.325,-3.3,-3.275,-3.25,-3.225,-3.2,-3.175,-3.15,-3.125,-3.1,-3.075,-3.05,-3.025,-3.0,-2.975,-2.95,-2.925,-2.9,-2.875,-2.85,-2.825,-2.8,-2.775,-2.75,-2.725,-2.7,-2.675,-2.65,-2.625,-2.6,-2.575,-2.55,-2.525,-2.5,-2.4749999999999996,-2.45,-2.425,-2.4,-2.375,-2.3499999999999996,-2.325,-2.3,-2.275,-2.25,-2.2249999999999996,-2.2,-2.175,-2.15,-2.125,-2.0999999999999996,-2.075,-2.05,-2.025,-2.0,-1.9749999999999999,-1.95,-1.9249999999999998,-1.9,-1.875,-1.8499999999999999,-1.825,-1.7999999999999998,-1.775,-1.75,-1.7249999999999999,-1.7,-1.6749999999999998,-1.65,-1.625,-1.5999999999999999,-1.575,-1.5499999999999998,-1.525,-1.5,-1.475,-1.4499999999999997,-1.4249999999999998,-1.4,-1.375,-1.35,-1.3249999999999997,-1.2999999999999998,-1.275,-1.25,-1.225,-1.1999999999999997,-1.1749999999999998,-1.15,-1.125,-1.0999999999999996,-1.0749999999999997,-1.0499999999999998,-1.025,-1.0,-0.9749999999999996,-0.9499999999999997,-0.9249999999999998,-0.8999999999999999,-0.875,-0.8499999999999996,-0.8249999999999997,-0.7999999999999998,-0.7749999999999999,-0.75,-0.7249999999999996,-0.6999999999999997,-0.6749999999999998,-0.6499999999999999,-0.625,-0.5999999999999996,-0.5749999999999997,-0.5499999999999998,-0.5249999999999999,-0.5,-0.47499999999999964,-0.44999999999999973,-0.4249999999999998,-0.3999999999999999,-0.375,-0.34999999999999964,-0.32499999999999973,-0.2999999999999998,-0.2749999999999999,-0.25,-0.22499999999999964,-0.19999999999999973,-0.17499999999999982,-0.1499999999999999,-0.125,-0.09999999999999964,-0.07499999999999973,-0.04999999999999982,-0.02499999999999991,0.0,0.025000000000000355,0.050000000000000266,0.07500000000000018,0.10000000000000009,0.125,0.15000000000000036,0.17500000000000027,0.20000000000000018,0.2250000000000001,0.25,0.27500000000000036,0.30000000000000027,0.3250000000000002,0.3500000000000001,0.375,0.40000000000000036,0.42500000000000027,0.4500000000000002,0.4750000000000001,0.5,0.5250000000000004,0.5499999999999998,0.5750000000000002,0.6000000000000005,0.625,0.6500000000000004,0.6749999999999998,0.7000000000000002,0.7250000000000005,0.75,0.7750000000000004,0.7999999999999998,0.8250000000000002,0.8500000000000005,0.875,0.9000000000000004,0.9249999999999998,0.9500000000000002,0.9750000000000005,1.0,1.0250000000000004,1.0499999999999998,1.0750000000000002,1.1000000000000005,1.125,1.1500000000000004,1.1749999999999998,1.2000000000000002,1.2250000000000005,1.25,1.2750000000000004,1.3000000000000007,1.3250000000000002,1.3500000000000005,1.375,1.4000000000000004,1.4250000000000007,1.4500000000000002,1.4750000000000005,1.5,1.5250000000000004,1.5500000000000007,1.5750000000000002,1.6000000000000005,1.625,1.6500000000000004,1.6750000000000007,1.7000000000000002,1.7250000000000005,1.75,1.7750000000000004,1.8000000000000007,1.8250000000000002,1.8500000000000005,1.875,1.9000000000000004,1.9250000000000007,1.9500000000000002,1.9750000000000005,2.0,2.0250000000000004,2.0500000000000007,2.075,2.1000000000000005,2.125,2.1500000000000004,2.1750000000000007,2.2,2.2250000000000005,2.25,2.2750000000000004,2.3000000000000007,2.325,2.3500000000000005,2.375,2.4000000000000004,2.4250000000000007,2.45,2.4750000000000005,2.5,2.5250000000000004,2.5500000000000007,2.575,2.6000000000000005,2.625,2.6500000000000004,2.6750000000000007,2.7,2.7250000000000005,2.75,2.7750000000000004,2.8000000000000007,2.825,2.8500000000000005,2.875,2.9000000000000004,2.9250000000000007,2.95,2.9750000000000005,3.0,3.0250000000000004,3.0500000000000007,3.075,3.1000000000000005,3.125,3.1500000000000004,3.1750000000000007,3.2,3.2250000000000005,3.25,3.2750000000000004,3.3000000000000007,3.325,3.3500000000000005,3.375,3.4000000000000004,3.4250000000000007,3.45,3.4750000000000005,3.5],"target":[-0.0022043143826054323,-0.0026839325165231576,-0.0032513905038003554,-0.003918890042032441,-0.0046994823011477505,-0.005606943500757577,-0.006655602611312539,-0.007860116810313678,-0.009235191428295153,-0.010795242589342113,-0.012554002590234037,-0.014524070254854637,-0.01671641100887805,-0.01913981418343319,-0.021800317991295393,-0.024700615617977484,-0.027839458804994444,-0.031211078028741845,-0.034804640739517556,-0.038603770960284056,-0.042586154696320266,-0.046723255929857876,-0.05098016734484162,-0.05531561825369119,-0.05968215942749283,-0.06402654065694074,-0.06829029193890862,-0.07241051329254505,-0.07632087151346051,-0.07995279488053947,-0.08323684918804469,-0.08610427077309685,-0.08848862475705183,-0.0903275498415706,-0.09156454501514016,-0.09215074873299628,-0.09204665779785542,-0.09122373150719715,-0.0896658268013591,-0.08737041223214509,-0.08434951258518658,-0.08063034186414525,-0.07625558993744247,-0.07128333724309416,-0.0657865822651787,-0.05985237770433366,-0.053580582992599324,-0.04708225265285698,-0.04047769156821551,-0.033894219105698176,-0.027463693850495574,-0.02131985910475348,-0.015595575986906474,-0.010420015688127615,-0.005915885019106393,-0.0021967596994823535,0.0006354021374306851,0.0024924979984654594,0.003302208825226971,0.0030095631074010254,0.0015780940349520711,-0.0010094420016264483,-0.0047508045703137936,-0.009624471639807786,-0.015590297272649656,-0.022590603053813274,-0.030551668881897698,-0.03938557696140471,-0.04899235253306805,-0.059262336441886554,-0.07007871838901708,-0.08132015589084768,-0.09286340273672639,-0.10458587215884557,-0.11636806396143046,-0.12809579135122734,-0.1396621519104047,-0.150969197700422,-0.1619292714389205,-0.17246598854117773,-0.1825148580080977,-0.1920235481010178,-0.200951814907731,-0.20927112275281462,-0.21696399448689646,-0.2240231366470809,-0.2304503890732011,-0.23625555068020238,-0.2414551327499967,-0.2460710884743303,-0.25012956283413806,-0.2536597006248907,-0.25669254299389127,-0.25926003475344866,-0.2613941564950289,-0.2631261876532242,-0.26448609959881847,-0.26550207193774494,-0.26620012071193616,-0.2666038242740903,-0.2667341312523865,-0.26660923512543927,-0.26624450127986815,-0.2656524347276891,-0.2648426795686624,-0.26382204442126583,-0.2625945510525078,-0.26116150598965876,-0.25952159674210756,-0.2576710152326798,-0.2556036110686151,-0.25331107640965916,-0.25078316254790783,-0.24800792611680805,-0.24497200037097383,-0.24166088453325257,-0.23805924210300317,-0.2341511975451222,-0.22992062016357756,-0.22535138435909535,-0.2204275969373724,-0.2151337846290678,-0.20945503836203,-0.20337711485419302,-0.19688650046256445,-0.1899704465696606,-0.18261698973189683,-0.17481497298230925,-0.16655408674006772,-0.15782494846739287,-0.1486192393582842,-0.1389299138794105,-0.12875149396601576,-0.11808045427783737,-0.10691569842546561,-0.0952591188644683,-0.08311622567249116,-0.07049682216582759,-0.05741569877975078,-0.04389331131167257,-0.02995640593300669,-0.015638551654505284,-0.0009805414110024557,0.013969374282991553,0.029155452102068824,0.04451464295432234,0.05997701622900564,0.0754664259015651,0.09090141205213487,0.10619632002296003,0.12126260850126658,0.13601030788662954,0.1503495819638701,0.16419233965436453,0.17745383985149488,0.19005423131596338,0.2019199714169893,0.2129850720973656,0.22319212859448073,0.23249309579643224,0.24084978815380403,0.24823409120497686,0.25462788534308817,0.26002269476914924,0.26441908596990943,0.2678258499223195,0.27025901004819247,0.27174070334181116,0.2722979848416125,0.2719616056526947,0.2707648121561618,0.2687422091299306,0.26592872265886625,0.26235869044570004,0.25806509803791944,0.2530789701824084,0.2474289176217241,0.24114083171428807,0.2342377127667573,0.22673961326128694,0.2186636744518079,0.21002423414631333,0.20083298478642997,0.19109916393712023,0.18082976364073355,0.17002975030900574,0.15870229240375822,0.14684899855262373,0.13447017344236162,0.12156510237188883,0.10813237736733167,0.09417027802195083,0.07967721862551352,0.06465226974161198,0.04909575737711808,0.03300993660138929,0.01639972936456352,-0.0007264911305794319,-0.018356094247432175,-0.03647139488182899,-0.05504890130418888,-0.07405864645800869,-0.09346364186198924,-0.11321949132266901,-0.13327419715986283,-0.15356818469820005,-0.17403456168047798,-0.19459961847204937,-0.21518356304982805,-0.23570147250967038,-0.2560644309492119,-0.2761808128699084,-0.2959576624325205,-0.315302112643761,-0.3341227853574272,-0.35233111317013505,-0.36984252799847245,-0.38657746823260725,-0.4024621665342751,-0.41742919303287557,-0.4314177431354764,-0.444373674526576,-0.4562493132264919,-0.46700306281467013,-0.4765988631599924,-0.4850055543967719,-0.49219620777300727,-0.498147486924638,-0.5028391008971864,-0.5062534039167215,-0.5083751868493684,-0.5091916920782653,-0.5086928679794003,-0.5068718622660007,-0.5037257362657477,-0.4992563657934154,-0.4934714797339525,-0.4863857756909044,-0.4780220438368638,-0.4684122259529732,-0.45759833682911405,-0.4456331797056869,-0.4325807959912877,-0.4185166015594461,-0.4035271767744805,-0.38770969412739226,-0.3711709849883907,-0.35402626448471713,-0.33639754990848253,-0.31841182246373073,-0.30019899383743637,-0.28188974747604717,-0.2636133292308997,-0.2454953630885876,-0.22765576513053581,-0.2102068229728889,-0.19325149919539447,-0.17688200627779854,-0.16117868801051843,-0.14620922895753546,-0.13202820004043408,-0.11867693535170482,-0.10618372347786226,-0.09456428639377262,-0.08382251072724817,-0.07395139010106316,-0.06493413341844817,-0.05674539232418968,-0.04935256149468753,-0.0427171076471316,-0.03679588690629171,-0.031542415083400555,-0.026908061145194007,-0.022843140327722555,-0.019297889648515476,-0.016223314699896074,-0.01357190232242772,-0.011298198872031817,-0.009359258175328622,-0.007714966838350323,-0.006328257307553653]}</script>
+<script>
+  'use strict';
+  const data = JSON.parse(document.getElementById('trained-data').textContent);
+  const gaussian = (x, center) => Math.exp(-(((x - center) / data.scale) ** 2));
+  const curves = data.centers.map((center, k) => data.x.map((x) => data.weights[k] * gaussian(x, center)));
+  const selected = new Set();
+  const chart = document.getElementById('edge-chart');
+  const grid = document.getElementById('term-grid');
+  const play = document.getElementById('play');
+  const all = document.getElementById('all');
+  const reset = document.getElementById('reset');
+  const status = document.getElementById('model-status');
+  const detail = document.getElementById('selection-detail');
+  const recentKey = document.getElementById('recent-key');
+  const recentLabel = document.getElementById('recent-label');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+  const scheme = matchMedia('(prefers-color-scheme: dark)');
+  const fmt = (value, places) => String(places === undefined ? value : value.toFixed(places)).replace('-', '−');
+  const miniLimit = Math.max(...data.weights.slice(1).map(Math.abs)) * 1.07;
+  const minPossible = data.x.map((_, i) => curves.reduce((sum, row) => sum + Math.min(0, row[i]), 0));
+  const maxPossible = data.x.map((_, i) => curves.reduce((sum, row) => sum + Math.max(0, row[i]), 0));
+  const tickSize = 0.2;
+  const yMin = Math.floor((Math.min(...minPossible) - .025) / tickSize) * tickSize;
+  const yMax = Math.ceil((Math.max(...maxPossible) + .025) / tickSize) * tickSize;
+  let frame = 0;
+  let timer = 0;
+  let playing = false;
+  let recent = null;
+  let visible = data.x.map(() => 0);
+  let plotStyle;
+
+  function refreshColors() {
+    const styles = getComputedStyle(document.documentElement);
+    plotStyle = Object.fromEntries(['ink', 'muted', 'axis', 'grid', 'current', 'reference', 'term']
+      .map((key) => [key, styles.getPropertyValue(`--${key}`).trim()]));
+  }
+
+  const tiles = data.centers.map((center, k) => {
+    const button = document.createElement('button');
+    button.className = 'term';
+    button.type = 'button';
+    button.setAttribute('aria-pressed', 'false');
+    button.setAttribute('aria-label', `高斯项，中心 ${fmt(center)}，系数 ${fmt(data.weights[k], 3)}`);
+    const name = document.createElement('span');
+    name.className = 'term-title';
+    name.textContent = `中心 ${fmt(center)}`;
+    const toggle = document.createElement('span');
+    toggle.className = 'term-toggle';
+    toggle.setAttribute('aria-hidden', 'true');
+    toggle.textContent = '+';
+    const mini = document.createElement('canvas');
+    mini.setAttribute('aria-hidden', 'true');
+    const coeff = document.createElement('span');
+    coeff.className = 'term-weight';
+    coeff.textContent = `c = ${fmt(data.weights[k], 3)}`;
+    button.append(name, toggle, mini, coeff);
+    grid.append(button);
+    button.addEventListener('click', () => {
+      stopPlayback();
+      toggleTerm(k);
+    });
+    return {button, mini, toggle};
+  });
+
+  function surface(canvas) {
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const ratio = Math.min(devicePixelRatio || 1, 3);
+    const pixelWidth = Math.round(width * ratio);
+    const pixelHeight = Math.round(height * ratio);
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    return {ctx, width, height};
+  }
+
+  function segment(ctx, x0, y0, x1, y1) {
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+
+  function trace(ctx, values, toX, toY, color, width, dash = []) {
+    ctx.beginPath();
+    for (let i = 0; i < values.length; i++) {
+      const x = toX(data.x[i]);
+      const y = toY(values[i]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = dash.length ? 'butt' : 'round';
+    ctx.setLineDash(dash);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function mainChart() {
+    const {ctx, width, height} = surface(chart);
+    const left = 54, top = 24, right = width - 14, bottom = height - 46;
+    const toX = (x) => left + (x - data.x[0]) * (right - left) / (data.x.at(-1) - data.x[0]);
+    const toY = (y) => bottom - (y - yMin) * (bottom - top) / (yMax - yMin);
+    const xTicks = width < 440 ? [-3, -1.5, 0, 1.5, 3] : [-3, -2, -1, 0, 1, 2, 3];
+    ctx.font = '12px "Segoe UI", "Microsoft YaHei", sans-serif';
+    ctx.lineWidth = 1;
+    for (const tick of xTicks) {
+      const x = toX(tick);
+      ctx.strokeStyle = plotStyle.grid;
+      segment(ctx, x, top, x, bottom);
+      ctx.fillStyle = plotStyle.muted;
+      ctx.textAlign = 'center';
+      ctx.fillText(fmt(tick), x, bottom + 17);
+    }
+    for (let index = Math.round(yMin / tickSize); index <= Math.round(yMax / tickSize); index++) {
+      const value = index * tickSize;
+      const y = toY(value);
+      ctx.strokeStyle = index === 0 ? plotStyle.axis : plotStyle.grid;
+      segment(ctx, left, y, right, y);
+      ctx.fillStyle = plotStyle.muted;
+      ctx.textAlign = 'right';
+      ctx.fillText(index === 0 ? '0' : fmt(value, 1), left - 8, y + 4);
+    }
+    ctx.strokeStyle = plotStyle.axis;
+    segment(ctx, left, top, left, bottom);
+    segment(ctx, left, bottom, right, bottom);
+    ctx.fillStyle = plotStyle.muted;
+    ctx.textAlign = 'left';
+    ctx.fillText('连接贡献', left, 14);
+    ctx.textAlign = 'center';
+    ctx.fillText('标准化后的 X₁', (left + right) / 2, height - 7);
+
+    if (recent !== null) trace(ctx, curves[recent.index], toX, toY, plotStyle.term, 1.7, [2, 4]);
+    trace(ctx, data.target, toX, toY, plotStyle.reference, 2.4, [7, 5]);
+    trace(ctx, visible, toX, toY, plotStyle.current, 3);
+  }
+
+  function drawTiles() {
+    tiles.forEach(({mini}, index) => {
+      const {ctx, width, height} = surface(mini);
+      const toX = (x) => 2 + (x - data.x[0]) * (width - 4) / (data.x.at(-1) - data.x[0]);
+      const toY = (y) => height / 2 - y * (height / 2 - 1.5) / miniLimit;
+      ctx.strokeStyle = plotStyle.axis;
+      ctx.lineWidth = 1;
+      segment(ctx, 2, height / 2, width - 2, height / 2);
+      trace(ctx, curves[index], toX, toY, selected.has(index) ? plotStyle.current : plotStyle.term, 1.8);
+    });
+  }
+
+  function sumCurve() {
+    return data.x.map((_, i) => curves.reduce((value, row, k) => selected.has(k) ? value + row[i] : value,
+      0));
+  }
+
+  function moveCurve(next) {
+    cancelAnimationFrame(frame);
+    if (reduced.matches) {
+      visible = next;
+      mainChart();
+      return;
+    }
+    const before = visible.slice();
+    const begin = performance.now();
+    const step = (now) => {
+      const progress = Math.min(1, (now - begin) / 340);
+      const ease = 1 - (1 - progress) ** 3;
+      visible = next.map((value, i) => before[i] + (value - before[i]) * ease);
+      mainChart();
+      if (progress < 1) frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+  }
+
+  function updateControls() {
+    play.textContent = playing ? '暂停' : '按顺序播放';
+    play.disabled = !playing && selected.size === curves.length;
+    all.disabled = selected.size === curves.length;
+    reset.disabled = selected.size === 0 && recent === null;
+  }
+
+  function update(animate = true) {
+    const next = sumCurve();
+    const rmse = Math.sqrt(next.reduce((sum, value, i) => sum + (value - data.target[i]) ** 2, 0) / next.length);
+    const difference = rmse < 1e-12 ? '重合' : rmse.toFixed(4);
+    status.textContent = `已加入 ${selected.size} / ${curves.length} 项 · 曲线差异（RMSE）${difference}`;
+    tiles.forEach(({button, toggle}, k) => {
+      button.setAttribute('aria-pressed', String(selected.has(k)));
+      toggle.textContent = selected.has(k) ? '✓' : '+';
+    });
+    recentKey.hidden = recent === null;
+    if (recent) recentLabel.textContent = recent.added ? '刚加入的项' : '刚移除的项';
+    if (selected.size === curves.length) {
+      detail.textContent = '11 个高斯项已加齐，当前曲线与目标重合。';
+    } else if (recent) {
+      detail.textContent = `${recent.added ? '加入' : '移除'}中心 ${fmt(data.centers[recent.index])} 的项。它在中心的贡献为 ${fmt(data.weights[recent.index], 3)}。`;
+    } else {
+      detail.textContent = '从零开始，点击任意高斯项加入曲线。';
+    }
+    updateControls();
+    drawTiles();
+    if (animate) moveCurve(next);
+    else {
+      visible = next;
+      mainChart();
+    }
+  }
+
+  function toggleTerm(index) {
+    const added = !selected.has(index);
+    if (added) selected.add(index);
+    else selected.delete(index);
+    recent = {index, added};
+    update();
+  }
+
+  function stopPlayback() {
+    clearTimeout(timer);
+    playing = false;
+    updateControls();
+  }
+
+  function nextTerm() {
+    const index = curves.findIndex((_, k) => !selected.has(k));
+    if (index === -1) {
+      stopPlayback();
+      return;
+    }
+    toggleTerm(index);
+    if (selected.size === curves.length) stopPlayback();
+    else timer = setTimeout(nextTerm, 700);
+  }
+
+  play.addEventListener('click', () => {
+    if (playing) stopPlayback();
+    else {
+      playing = true;
+      nextTerm();
+    }
+  });
+  all.addEventListener('click', () => {
+    stopPlayback();
+    curves.forEach((_, k) => selected.add(k));
+    recent = null;
+    update();
+  });
+  reset.addEventListener('click', () => {
+    stopPlayback();
+    selected.clear();
+    recent = null;
+    update();
+  });
+  refreshColors();
+  update(false);
+  const redraw = () => { mainChart(); drawTiles(); };
+  const resize = new ResizeObserver(redraw);
+  resize.observe(chart);
+  resize.observe(grid);
+  scheme.addEventListener('change', () => { refreshColors(); redraw(); });
+</script>
+</body>
+</html>

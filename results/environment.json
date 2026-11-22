@@ -18,5 +18,20 @@
   "max_epochs": 250,
   "patience": 35,
   "batch": 64,
-  "data_sha256": "0089fcffc1415e41e2ff63730cca5280efe54fc43d722dfde1b0aaa808e35dc4"
+  "data_sha256": "0089fcffc1415e41e2ff63730cca5280efe54fc43d722dfde1b0aaa808e35dc4",
+  "kan_basis": "gaussian_rbf_only",
+  "kan_centers": [
+    -2.5,
+    -2.0,
+    -1.5,
+    -1.0,
+    -0.5,
+    0.0,
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    2.5
+  ],
+  "kan_gaussian_scale": 0.5
 }
