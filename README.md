@@ -13,6 +13,7 @@ This project predicts two simulated building loads, heating and cooling, from th
 | `KAN_Preprocessed_16_Inputs.xlsx` and `MLP_Preprocessed_16_Inputs.xlsx` | The 16 model inputs for both test protocols, in the original workbook's row order. |
 | `compare_results.py` | Combines both models’ outputs and draws the comparison figures. |
 | `results/` | Configuration trials, per-run scores, predictions, and plots. `results/kan/` and `results/mlp/` hold the separate outputs. |
+| `mlp-building-walkthrough.html` | Four-step offline MLP demonstration for Excel row 3, using a seed-101 reproduction of the random-row model at epoch 242. |
 | `gaussian-edge-animation.html` | Offline demo that adds learned Gaussian terms one at a time. |
 | `Presentation_中文版.pptx` | Chinese presentation with validation MSE curves, early-stopping examples, and a four-panel test prediction comparison. |
 | `Presentation.pptx` | 18 slides with speaker notes, input examples on slides 7 and 8, and a link to the demo on slide 10. |
@@ -36,7 +37,7 @@ Open `Energy_KAN.ipynb` and `Energy_MLP.ipynb` and select **Restart Kernel and R
 
 ## Presentation plan
 
-December 8, 2026, at 8:30 a.m. Presenter A covers slides 1–5 in 7 minutes, Presenter B covers slides 6–13 in 8 minutes, and Presenter C covers slides 14–18 in 8 minutes. The remaining 7 minutes are for questions.
+December 8, 2026, at 8:30 a.m. The Chinese deck has 17 slides and budgets 23 minutes for the talk, including transitions. Keep both HTML demos next to the PPTX when copying it to the presentation computer. Slide 8 opens the MLP walkthrough and slide 9 opens the Gaussian KAN demo. The remaining 7 minutes are for questions.
 
 ## Sources
 
